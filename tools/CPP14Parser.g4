@@ -29,7 +29,7 @@ translationUnit: declarationseq? EOF;
 /*Expressions*/
 
 primaryExpression:
-	Literal+
+	literal+
 	| This
 	| LeftParen expression RightParen
 	| idExpression
@@ -62,7 +62,7 @@ lambdaCapture:
 	captureList
 	| captureDefault (Comma captureList)?;
 
-captureDefault: And | Equal;
+captureDefault: And | Assign;
 
 captureList: capture (Comma capture)* Ellipsis?;
 
@@ -73,7 +73,7 @@ simpleCapture: And? Identifier | This;
 initcapture: And? Identifier initializer;
 
 lambdaDeclarator:
-	LeftParen parameterDeclarationClause RightParen Mutable? exceptionSpecification?
+	LeftParen parameterDeclarationClause? RightParen Mutable? exceptionSpecification?
 		attributeSpecifierSeq? trailingReturnType?;
 
 postfixExpression:
@@ -170,7 +170,7 @@ additiveExpression:
 shiftExpression:
 	additiveExpression (shiftOperator additiveExpression)*;
 
-shiftOperator: RightShift | LeftShift;
+shiftOperator: Greater Greater | Less Less;
 
 relationalExpression:
 	shiftExpression (
@@ -225,6 +225,7 @@ constantExpression: conditionalExpression;
 
 statement:
 	labeledStatement
+	| declarationStatement
 	| attributeSpecifierSeq? (
 		expressionStatement
 		| compoundStatement
@@ -232,8 +233,7 @@ statement:
 		| iterationStatement
 		| jumpStatement
 		| tryBlock
-	)
-	| declarationStatement;
+	);
 
 labeledStatement:
 	attributeSpecifierSeq? (
@@ -312,9 +312,8 @@ aliasDeclaration:
 	Using Identifier attributeSpecifierSeq? Assign theTypeId Semi;
 
 simpleDeclaration:
-	declSpecifierSeq? Semi
-	| proDeclSpecifierSeq? initDeclaratorList? Semi
-	| attributeSpecifierSeq proDeclSpecifierSeq? initDeclaratorList Semi;
+	declSpecifierSeq? initDeclaratorList? Semi
+	| attributeSpecifierSeq declSpecifierSeq? initDeclaratorList Semi;
 
 staticAssertDeclaration:
 	Static_assert LeftParen constantExpression Comma StringLiteral RightParen Semi;
@@ -330,8 +329,8 @@ declSpecifier:
 	| Friend
 	| Typedef
 	| Constexpr;
-
-declSpecifierSeq: declSpecifier+ attributeSpecifierSeq?;
+	
+declSpecifierSeq: declSpecifier+? attributeSpecifierSeq?;
 
 storageClassSpecifier:
 	Register
@@ -360,21 +359,27 @@ typeSpecifierSeq: typeSpecifier+ attributeSpecifierSeq?;
 trailingTypeSpecifierSeq:
 	trailingTypeSpecifier+ attributeSpecifierSeq?;
 
+simpleTypeLengthModifier:
+	Short
+	| Long;
+	
+simpleTypeSignednessModifier:
+	Unsigned
+	| Signed;
+
 simpleTypeSpecifier:
 	nestedNameSpecifier? theTypeName
 	| nestedNameSpecifier Template simpleTemplateId
-	| Char
-	| Char16
-	| Char32
-	| Wchar
+	| simpleTypeSignednessModifier
+	| simpleTypeSignednessModifier? simpleTypeLengthModifier+
+	| simpleTypeSignednessModifier? Char
+	| simpleTypeSignednessModifier? Char16
+	| simpleTypeSignednessModifier? Char32
+	| simpleTypeSignednessModifier? Wchar
 	| Bool
-	| Short
-	| Int
-	| Long
-	| Signed
-	| Unsigned
+	| simpleTypeSignednessModifier? simpleTypeLengthModifier* Int
 	| Float
-	| Double
+	| simpleTypeLengthModifier? Double
 	| Void
 	| Auto
 	| decltypeSpecifier;
@@ -416,13 +421,13 @@ enumbase: Colon typeSpecifierSeq;
 enumeratorList:
 	enumeratorDefinition (Comma enumeratorDefinition)*;
 
-enumeratorDefinition: enumerator attributeSpecifierSeq? (Assign constantExpression)?;
+enumeratorDefinition: enumerator (Assign constantExpression)?;
 
 enumerator: Identifier;
 
-namespaceName: Identifier | namespaceAlias;
+namespaceName: originalNamespaceName | namespaceAlias;
 
-originalNamespaceName: qualifiedNamespaceSpecifier;
+originalNamespaceName: Identifier;
 
 namespaceDefinition:
 	Inline? Namespace (Identifier | originalNamespaceName)? LeftBrace namespaceBody = declarationseq
@@ -431,9 +436,9 @@ namespaceDefinition:
 namespaceAlias: Identifier;
 
 namespaceAliasDefinition:
-	Namespace Identifier Assign qualifiedNamespaceSpecifier Semi;
+	Namespace Identifier Assign qualifiednamespacespecifier Semi;
 
-qualifiedNamespaceSpecifier: nestedNameSpecifier? namespaceName;
+qualifiednamespacespecifier: nestedNameSpecifier? namespaceName;
 
 usingDeclaration:
 	Using ((Typename_? nestedNameSpecifier) | Doublecolon) unqualifiedId Semi;
@@ -452,7 +457,7 @@ linkageSpecification:
 attributeSpecifierSeq: attributeSpecifier+;
 
 attributeSpecifier:
-	LeftBracket LeftBracket (Using attributeNamespace Colon)? attributeList? RightBracket RightBracket
+	LeftBracket LeftBracket attributeList? RightBracket RightBracket
 	| alignmentspecifier;
 
 alignmentspecifier:
@@ -556,57 +561,15 @@ parameterDeclarationClause:
 parameterDeclarationList:
 	parameterDeclaration (Comma parameterDeclaration)*;
 
-proSimpleTypeSpecifier:
-	nestedNameSpecifier? theTypeName
-	| nestedNameSpecifier Template simpleTemplateId
-	| (
-		Char
-		| Char16
-		| Char32
-		| Wchar
-		| Bool
-		| Short
-		| Int
-		| Long
-		| Signed
-		| Unsigned
-		| Float
-		| Double
-		| Void
-		| Auto
-		| decltypeSpecifier
-	)+;
-
-nonSimpleTypeDeclSpecifier
-	: storageClassSpecifier
-	| (
-		(
-			elaboratedTypeSpecifier
-			| typeNameSpecifier
-			| cvQualifier
-		)
-		| classSpecifier
-		| enumSpecifier
-	)
-	| functionSpecifier
-	| Friend
-	| Typedef
-	| Constexpr;
-
-preDeclSpecifierSeq
-	: nonSimpleTypeDeclSpecifier+;
-postDeclSpecifierSeq
-	: nonSimpleTypeDeclSpecifier+;
-proDeclSpecifierSeq
-	: preDeclSpecifierSeq? proSimpleTypeSpecifier postDeclSpecifierSeq? attributeSpecifierSeq?;
-
 parameterDeclaration:
-	attributeSpecifierSeq? proDeclSpecifierSeq (
-		(declarator | abstractDeclarator)? ( Assign initializerClause )?
+	attributeSpecifierSeq? declSpecifierSeq (
+		(declarator | abstractDeclarator?) (
+			Assign initializerClause
+		)?
 	);
 
 functionDefinition:
-	attributeSpecifierSeq? proDeclSpecifierSeq? declarator virtualSpecifierSeq? functionBody;
+	attributeSpecifierSeq? declSpecifierSeq? declarator virtualSpecifierSeq? functionBody;
 
 functionBody:
 	constructorInitializer? compoundStatement
@@ -651,11 +614,10 @@ classVirtSpecifier: Final;
 classKey: Class | Struct;
 
 memberSpecification:
-	(memberDeclaration | accessSpecifier Colon)+;
+	(memberdeclaration | accessSpecifier Colon)+;
 
-memberDeclaration:
-	attributeSpecifierSeq? proDeclSpecifierSeq? memberDeclaratorList? Semi
-	| declSpecifierSeq? Semi
+memberdeclaration:
+	attributeSpecifierSeq? declSpecifierSeq? memberDeclaratorList? Semi
 	| functionDefinition
 	| usingDeclaration
 	| staticAssertDeclaration
@@ -681,17 +643,14 @@ virtualSpecifier: Override | Final;
  */
 
 pureSpecifier:
-	Assign val = OctalLiteral {if($val.text != "0") throw new InputMismatchException(this);
+	Assign val = OctalLiteral {if($val.text.compareTo("0")!=0) throw new InputMismatchException(this);
 		};
 /*Derived classes*/
 
 baseClause: Colon baseSpecifierList;
 
 baseSpecifierList:
-	baseSpecifierX (Comma baseSpecifierX)*;
-
-baseSpecifierX:
-	baseSpecifier Ellipsis?;
+	baseSpecifier Ellipsis? (Comma baseSpecifier Ellipsis?)*;
 
 baseSpecifier:
 	attributeSpecifierSeq? (
@@ -826,24 +785,23 @@ theOperator:
 	| Tilde
 	| Not
 	| Assign
-	| Less
 	| Greater
+	| Less
+	| GreaterEqual
 	| PlusAssign
 	| MinusAssign
 	| StarAssign
-	| Assign
 	| ModAssign
 	| XorAssign
 	| AndAssign
 	| OrAssign
-	| LeftShift
-	| RightShift
+	| Less Less
+	| Greater Greater
 	| RightShiftAssign
 	| LeftShiftAssign
 	| Equal
 	| NotEqual
 	| LessEqual
-	| GreaterEqual
 	| AndAnd
 	| OrOr
 	| PlusPlus
@@ -853,3 +811,13 @@ theOperator:
 	| Arrow
 	| LeftParen RightParen
 	| LeftBracket RightBracket;
+
+literal:
+	IntegerLiteral
+	| CharacterLiteral
+	| FloatingLiteral
+	| StringLiteral
+	| BooleanLiteral
+	| PointerLiteral
+	| UserDefinedLiteral;
+	
